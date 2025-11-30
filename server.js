@@ -29,6 +29,7 @@ pool.query('SELECT NOW()', (err, res) => {
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: '10mb' })); // Allow larger payloads for embeddings
+app.use(createTables); // Ensure tables exist
 
 // JWT Secret
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
@@ -401,3 +402,99 @@ app.listen(PORT, () => {
   console.log(`✓ Distance threshold: ${process.env.DISTANCE_THRESHOLD || 0.5}`);
   console.log(`✓ Liveness threshold: ${process.env.LIVENESS_THRESHOLD || 0.6}`);
 });
+
+async function createTables(req, res, next) {
+  const client = await pool.connect();
+  
+  try {
+    // Start transaction for atomic table creation
+    await client.query('BEGIN');
+    
+    // Enable pgvector extension
+    await client.query('CREATE EXTENSION IF NOT EXISTS vector');
+    
+    // People table: stores user info and face embeddings
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS people (
+        id SERIAL PRIMARY KEY,
+        user_id TEXT UNIQUE NOT NULL,
+        name TEXT NOT NULL,
+        embedding vector(128),  -- face-api.js produces 128-dimensional embeddings
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    
+    // Attendance table: logs each attendance event
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS attendance (
+        id SERIAL PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        matched_person_id INT REFERENCES people(id) ON DELETE SET NULL,
+        confidence DOUBLE PRECISION CHECK (confidence >= 0),
+        liveness_score DOUBLE PRECISION CHECK (liveness_score >= 0 AND liveness_score <= 1),
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    
+    // Create indexes (these are idempotent with IF NOT EXISTS)
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS people_embedding_idx 
+      ON people USING ivfflat (embedding vector_l2_ops) 
+      WITH (lists = 100)
+    `);
+    
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS attendance_created_at_idx 
+      ON attendance(created_at DESC)
+    `);
+    
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS attendance_user_id_idx 
+      ON attendance(user_id)
+    `);
+    
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS attendance_person_id_idx 
+      ON attendance(matched_person_id)
+    `);
+    
+    // Commit transaction
+    await client.query('COMMIT');
+    
+    console.log('Database tables and indexes created successfully');
+    
+    // Send success response if this is an HTTP endpoint
+    if (res) {
+      return res.status(200).json({ 
+        success: true, 
+        message: 'Tables created successfully' 
+      });
+    }
+    
+    // Call next middleware if available
+    if (next) next();
+    
+  } catch (err) {
+    // Rollback on error
+    await client.query('ROLLBACK');
+    
+    console.error('Error creating tables:', err);
+    
+    // Send error response if this is an HTTP endpoint
+    if (res) {
+      return res.status(500).json({ 
+        success: false, 
+        error: 'Failed to create database tables',
+        details: process.env.NODE_ENV === 'development' ? err.message : undefined
+      });
+    }
+    
+    // Pass error to error handling middleware
+    if (next) next(err);
+    
+  } finally {
+    // Always release the client back to the pool
+    client.release();
+  }
+}
