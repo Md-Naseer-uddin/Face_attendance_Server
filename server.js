@@ -29,7 +29,7 @@ pool.query('SELECT NOW()', (err, res) => {
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: '10mb' })); // Allow larger payloads for embeddings
-app.use(createTables); // Ensure tables exist
+// app.use(createTables); // Ensure tables exist
 
 // JWT Secret
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
