@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS people (
     id SERIAL PRIMARY KEY,
     user_id TEXT UNIQUE NOT NULL,
     name TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'user'
     embedding vector(128),  -- face-api.js produces 128-dimensional embeddings
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
