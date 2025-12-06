@@ -6,9 +6,12 @@ CREATE TABLE IF NOT EXISTS people (
     id SERIAL PRIMARY KEY,
     user_id TEXT UNIQUE NOT NULL,
     name TEXT NOT NULL,
-    role TEXT NOT NULL DEFAULT 'user'
+    email TEXT UNIQUE,
+    password TEXT,
+    role TEXT NOT NULL DEFAULT 'user',
     embedding vector(128),  -- face-api.js produces 128-dimensional embeddings
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Attendance table: logs each attendance event

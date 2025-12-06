@@ -1,10 +1,13 @@
 {
   "name": "face-attendance-server",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "type": "module",
+  "description": "Face recognition-based attendance system with role-based access control",
+  "main": "server-new.js",
   "scripts": {
-    "dev": "node server.js",
-    "start": "node server.js"
+    "dev": "node server-new.js",
+    "start": "node server-new.js",
+    "legacy": "node server.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
